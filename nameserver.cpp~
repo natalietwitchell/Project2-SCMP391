@@ -1,0 +1,154 @@
+/***************************************************************************
+* nameservercpp  -  Program to serve of last name statistics
+ *
+* copyright : (C) 2009 by Jim Skon
+*
+* This program runs as a background server to a CGI program, providinging US Census
+* Data on the frequency of names in response to requestes.  The rational for this 
+* is to demonstrait how a background process can serve up information to a web program,
+* saving the web program from the work of intiallizing large data structures for every
+* call.
+* 
+* 
+*
+***************************************************************************/
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <vector>
+#include <unistd.h>
+#include <fcntl.h>
+#include <stdlib.h>
+#include <sys/stat.h>
+#include <iostream>
+#include <fstream>
+#include <map>
+#include "fifo.h"
+
+using namespace std;
+
+/* Fifo names */
+string receive_fifo = "Namerequest";
+string send_fifo = "Namereply";
+
+
+
+map<string, vector<int>>refs;
+map<string, vector<int>>::iterator it; 
+
+string path = "./home/class/SoftDev/shakespeare/";
+
+string line, word; 
+char again; 
+
+vector <int> indexSearch(string word); 
+//Precondition: a word is defined, uses the map defined above and an open file. 
+//Postcondition: returns a vector of the line numbers where the word appears. 
+
+
+
+ * Read the US Census data file "dist.all.last" and load it into an
+ * in memory b+tree with name as the key.
+ *
+ * Return 1 if success, 0 if fail
+ */
+int createnamemap(map<string,name_record> &name_map ,string path) {
+	
+    int position = 0;
+    while (!infile.fail()) {
+        getline(infile, line); // get the next line of code
+        istringstream lineStream(line); // Create a string stream of the line
+        while (lineStream >> word) { // get the next word
+            refs[word].push_back(position);
+            // push the word and the line position on the vector for this word
+        }
+        position = infile.tellg(); // get the poistion of the next line
+    }
+
+}
+
+
+/* Server main line,create name MAP, wait for and serve requests */
+int main() {
+  
+  string inMessage, outMessage,name,percent,rank,type;
+  name_record result;
+  int pos;
+
+  // Create the map of last name data
+  if (createnamemap(shakespeare_map,"shakespeare") != 1) {
+	cout << "Error Loading Database" << endl;
+	exit(0);
+  }
+  
+  cout << "Name data loaded!" << endl;
+
+  // create the FIFOs for communication
+  Fifo recfifo(receive_fifo);
+  Fifo sendfifo(send_fifo);
+  
+  map<string,string> *curMap;
+  while (1) {
+
+    /* Get a message from a client */
+    recfifo.openread();
+    inMessage = recfifo.recv();
+	/* Parse the incoming message */
+	/* Form:  $type*name  */
+	pos=inMessage.find_first_of("*");
+	if (pos!=string::npos) {
+	  type = inMessage.substr(0,pos);
+	  pos++;
+	} else {
+	  type = "$WORD";
+	  pos = 0;
+	}
+	name = inMessage.substr(pos,2000);
+	cout << "Message: " << type << " : " << name << endl;
+
+	
+	if (type == "$WORD") {
+	  //Get the closest match
+	  vector<int> blank; // return for no matches                                                                                  
+    /* find the word and get the vector of references */
+    /* First use find, so as to NOT create a new entry */
+    it = refs.find(word);
+    if (it == refs.end()) {
+        return (blank);
+    } else {
+        return (refs[word]);
+    }
+
+
+	outMessage = "";
+	// Get 10 results
+	cout << " Results: " << outMessage << endl;
+	sendfifo.openwrite();
+	sendfifo.send(outMessage);
+	sendfifo.fifoclose();
+	recfifo.fifoclose();
+	
+	for (int i = 0; i < locations.size(); i++) {
+
+            infile2.seekg(0);
+
+            int lineNum = locations[i];
+            //cout << "Line Number: " << lineNum << ":" << endl;
+            //gets line number
+
+            infile2.seekg(lineNum);
+            //goes to line number
+
+            getline(shakespeare, outMessage);
+            
+            
+            if (outMessage!="$END")
+            (           
+            	sendfifo.openwrite();
+				sendfifo.send(outMessage);
+				sendfifo.fifoclose();
+				recfifo.fifoclose();
+			)
+       	 }
+
+  }
+}
